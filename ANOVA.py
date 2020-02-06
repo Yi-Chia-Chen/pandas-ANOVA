@@ -1,11 +1,14 @@
 #%%
 import itertools
+import functools
 import ast
 from datetime import datetime
 
 import pandas as pd
 from scipy import stats
 import numpy as np
+
+#%%
 
 # function
 def LIST_OF_STRING_TO_COMMA_STRING(input_string):
@@ -39,18 +42,32 @@ def FACTORIAL_COND(factor_list, level_dict):
 def LIST_TO_LIST_OF_STRINGS(input_list):
     return [str(t) for t in input_list]
 
+def APPEND_COMBINATIONS(result_list, combination_parameters):
+    factors = combination_parameters[0]
+    length = combination_parameters[1]
+    result_list += list(itertools.combinations(factors,length))
+    return result_list
+
 def ALL_COMBINATION(factor_list):
-    factors = list(factor_list)
-    combinations = []
-    combinations += factors
-    for l in range(2,len(factors)+1):
-        combinations += list(itertools.combinations(factors,l))
+    combinations = functools.reduce(
+        APPEND_COMBINATIONS, 
+        [(factor_list,l) for l in range(2,len(factor_list)+1)], 
+        list(factor_list)
+        )
     return LIST_TO_LIST_OF_STRINGS(combinations)
 
+def FILTER_BY_CRITERIA_TUPLE(df, criteria_tuple):
+    factor = criteria_tuple[0]
+    level = criteria_tuple[1]
+    df = df[df[factor] == level]
+    return df
+
 def FILTER_DATA(df, criteria_tuples, dv):
-    filtered_data = df.copy()
-    for factor, level in criteria_tuples:
-        filtered_data = filtered_data[filtered_data[factor] == level]
+    filtered_data = functools.reduce(
+        FILTER_BY_CRITERIA_TUPLE,
+        criteria_tuples,
+        df.copy()
+    )
     return list(filtered_data[dv])
 
 def CALCULATE_SS(data_list, unit_n):
@@ -73,10 +90,8 @@ COLUMN_N = len(data.columns)
 FACTOR_N = COLUMN_N - 1 # exclude the DV column
 FACTOR_LIST = list(data.columns[:-1])
 TOTAL_SUBJ_N = len(data)
-level_dict = {}
-for f in FACTOR_LIST:
-    level_dict[f] = list(data[f].unique())
-CONDITION_LIST = FACTORIAL_COND(FACTOR_LIST, level_dict)
+LEVEL_DICT = {f:list(data[f].unique()) for f in FACTOR_LIST}
+CONDITION_LIST = FACTORIAL_COND(FACTOR_LIST, LEVEL_DICT)
 CONDITION_N = len(CONDITION_LIST)
 CONDITION_SUBJ_N = TOTAL_SUBJ_N/CONDITION_N
 DEPENDENT_VARIABLE = data.columns[-1]
@@ -90,7 +105,7 @@ assert TOTAL_SUBJ_N > 0, 'FORMAT ERROR: No subject was found.'
 # print parameters
 parameters_string = 'Between-group ANOVA Factors:\n'
 for f in FACTOR_LIST:
-    parameters_string += f + ': ' + LIST_OF_STRING_TO_COMMA_STRING(level_dict[f]) + '\n'
+    parameters_string += f + ': ' + LIST_OF_STRING_TO_COMMA_STRING(LEVEL_DICT[f]) + '\n'
 parameters_string += 'DV: ' + DEPENDENT_VARIABLE
 print(parameters_string)
 
@@ -138,11 +153,10 @@ results.loc['Between','df'] = between_df
 # calculate SS, df, and MS for main effects
 subtraction_term = sum_of_all_data**2 / TOTAL_SUBJ_N
 for f in FACTOR_LIST:
-    this_levels = level_dict[f]
-    this_SS = 0
-    for l in this_levels:
-        this_data = FILTER_DATA(data, [(f,l)], DEPENDENT_VARIABLE)
-        this_SS += sum(this_data)**2 / len(this_data)
+    this_levels = LEVEL_DICT[f]
+    cell_size = TOTAL_SUBJ_N / len(this_levels)
+    sum_of_cell_list = [sum(FILTER_DATA(data, [(f,l)], DEPENDENT_VARIABLE)) for l in this_levels]
+    this_SS, _ = CALCULATE_SS(sum_of_cell_list, cell_size)
     this_SS -= subtraction_term
     this_df = len(this_levels) - 1
     results.loc[f,'SS'] = this_SS
@@ -152,15 +166,8 @@ for f in FACTOR_LIST:
 
 # calculate SS, df, and MS for interaction effects
 for s in effect_list[len(FACTOR_LIST):]:
-    # if s == str(tuple(FACTOR_LIST)):
-    #     this_SS = between_SS - sum(list(results['SS'].dropna())[1:-1])
-    #     this_df = between_df - sum(list(results['df'].dropna())[1:-1])
-    #     results.loc[s,'SS'] = this_SS
-    #     results.loc[s,'df'] = this_df
-    #     results.loc[s,'MS'] = this_SS / this_df
-    # else:
     source_tuple = ast.literal_eval(s)
-    all_dfs = [len(level_dict[f])-1 for f in source_tuple]
+    all_dfs = [len(LEVEL_DICT[f])-1 for f in source_tuple]
     this_df = np.prod(all_dfs)
 
     this_SS = 0
@@ -169,7 +176,7 @@ for s in effect_list[len(FACTOR_LIST):]:
     partition_df_list = [results.loc[i,'df'] for i in partition_list]
     total_SS_subtraction_term = sum(partition_SS_list)
 
-    cell_list = FACTORIAL_COND(source_tuple, level_dict)
+    cell_list = FACTORIAL_COND(source_tuple, LEVEL_DICT)
     for c in cell_list:
         this_data = FILTER_DATA(data, list(zip(source_tuple,c)), DEPENDENT_VARIABLE)
         cell_sum = sum(this_data)
@@ -180,6 +187,16 @@ for s in effect_list[len(FACTOR_LIST):]:
     results.loc[s,'SS'] = this_SS
     results.loc[s,'df'] = this_df
     results.loc[s,'MS'] = this_SS / this_df
+    if s == str(tuple(FACTOR_LIST)):
+        assert (
+            this_SS == between_SS - sum(list(results['SS'].dropna())[1:-1]), 
+            'PROGRAM ERROR: SS do not sum to total SS'
+            )
+        assert (
+            this_df == between_df - sum(list(results['df'].dropna())[1:-1]),
+            'PROGRAM ERROR: df do not sum to total df'
+            )
+
 
 
 # calculate total SS and df

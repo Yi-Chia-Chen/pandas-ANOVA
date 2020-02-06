@@ -1,4 +1,4 @@
-Size	Side	Resutls
+Size	Side	Results
 big	left	179
 big	left	331
 big	left	0
