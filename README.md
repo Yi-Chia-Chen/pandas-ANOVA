@@ -7,7 +7,8 @@ The data to be analyzed should be organized and saved in "input.txt" in the same
 
 ## Version History
 - 0.1.0b (2020.02.05): First beta version
-- 0.1.1b (2020.02.06): replace for loops with reduce() and comprehension
+- 0.1.1b (2020.02.06): replace for loops with reduce() and comprehension; correct a typo in the example input file
+- 0.1.2b (2020.02.06): clean up jupyter cell breaks
 
 ## Planned Improvements
 - Add within-subject ANOVA

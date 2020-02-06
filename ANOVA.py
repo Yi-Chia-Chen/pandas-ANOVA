@@ -1,4 +1,3 @@
-#%%
 import itertools
 import functools
 import ast
@@ -8,7 +7,6 @@ import pandas as pd
 from scipy import stats
 import numpy as np
 
-#%%
 
 # function
 def LIST_OF_STRING_TO_COMMA_STRING(input_string):
@@ -238,4 +236,3 @@ with open('output.txt','a') as results_file:
     results_file.write('\n'+parameters_string)
 
 
-# %%
